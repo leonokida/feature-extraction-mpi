@@ -76,7 +76,7 @@ int main(int argc, char **argv){
     // Obtém máximo, mínimo e soma de cada subsérie
     max_min_sum(auxserie, tam_auxserie, &auxmax, &auxmin, &soma);
 
-    // Gather e cálculo de média
+    // Reduce e cálculo de média
     MPI_Reduce(&auxmax, &max, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(&auxmin, &min, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
     MPI_Reduce(&soma, &media, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -84,20 +84,40 @@ int main(int argc, char **argv){
         media = media / tam_serie;
         printf("serie total - max: %lf, min: %lf, media: %lf\n", max, min, media);
     }
-
+    free(auxserie);
 
     // Para janelas
+    int num_janelas = tam_serie - tam_janela + 1;
+    int num_auxjanelas = num_janelas / num_procs;
 
-    // Vetores para armazenar resultados
-    int num_janelas = tam_serie - tam_janela;
-    double *medias = (double *) malloc(sizeof(double)*(num_janelas + 1));
-    double *maximos = (double *) malloc(sizeof(double)*(num_janelas + 1));
-    double *minimos = (double *) malloc(sizeof(double)*(num_janelas + 1));
+    // Vetores
+    double *medias = (double *)malloc(sizeof(double) * num_janelas);
+    double *maxs = (double *)malloc(sizeof(double) * num_janelas);
+    double *mins = (double *)malloc(sizeof(double) * num_janelas);
 
-    // for(int i = 0; i <= tam_serie - tam_janela; i++){
-    //     max_min_avg(&serie[i],tam_janela, &max, &min, &media);
-    //     printf("janela %d - max: %lf, min: %lf, media: %lf\n", i, max, min, media);
-    // }
+    // Vetores auxiliares
+    double *auxmedias = (double *)malloc(sizeof(double) * num_auxjanelas);
+    double *auxmaxs = (double *)malloc(sizeof(double) * num_auxjanelas);
+    double *auxmins = (double *)malloc(sizeof(double) * num_auxjanelas);
+
+    int j = rank * num_auxjanelas;
+    for(int i = 0; i < num_auxjanelas; i++){
+        max_min_avg(&serie[j],tam_janela, &max, &min, &media);
+        auxmaxs[i] = max;
+        auxmins[i] = min;
+        auxmedias[i] = media;
+        j++;
+    }
+
+    // Gather e imprime
+    MPI_Gather(auxmedias, num_auxjanelas, MPI_DOUBLE, medias, num_auxjanelas, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gather(auxmaxs, num_auxjanelas, MPI_DOUBLE, maxs, num_auxjanelas, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Gather(auxmins, num_auxjanelas, MPI_DOUBLE, mins, num_auxjanelas, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        for (int i = 0; i < num_janelas; i++)
+            printf("janela %d - max: %lf, min: %lf, media: %lf\n", i, maxs[i], mins[i], medias[i]);
+    }
 
     MPI_Finalize();
     return 0;
